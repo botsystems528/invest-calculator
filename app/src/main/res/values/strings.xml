@@ -1,0 +1,23 @@
+<resources>
+    <string name="app_name">Калькулятор+</string>
+    <string name="button1">Вычислить</string>
+    <string name="name1">Введите первое число</string>
+    <string name="name2">Введите второе число</string>
+    <string name="textview">калькулятор</string>
+    <string name="hint_1">Введите число</string>
+    <string name="hint_2">Введите сумму</string>
+    <string-array name="investment_periods">
+        <item>не реинвестировать</item>
+        <item>раз в месяц</item>
+        <item>раз в квартал</item>
+        <item>раз в полгода</item>
+        <item>раз в год</item>
+    </string-array>
+    <string-array name="deposit_periods">
+        <item>без доп. вложений</item>
+        <item>ежемесячно</item>
+        <item>ежеквартально</item>
+        <item>раз в полгода</item>
+        <item>раз в год</item>
+    </string-array>
+</resources>
