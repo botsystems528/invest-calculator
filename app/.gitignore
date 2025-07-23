@@ -1,0 +1,26 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+# Android Studio
+.idea/
+.gradle/
+build/
+*.iml
+local.properties
+
+# Keystores
+*.jks
+*.keystore
+
+# Файлы с секретами
+google-services.json
+*/secret/
