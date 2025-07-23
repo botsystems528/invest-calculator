@@ -3,7 +3,9 @@ package com.example.myapplication;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.text.Editable;
 import android.text.TextUtils;
+import android.text.TextWatcher;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -16,6 +18,11 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.text.NumberFormat;
+import java.util.Locale;
 
 public class Srok_Dostigenia extends AppCompatActivity {
     private TextView textView33;
@@ -44,13 +51,16 @@ public class Srok_Dostigenia extends AppCompatActivity {
         spinner4 = findViewById(R.id.spinner4);
         spinner6 = findViewById(R.id.spinner6);
 
+        setupNumberFormatting(editTextText12);
+        setupNumberFormatting(editTextText14);
+        setupNumberFormatting(editTextText15);
+        setupNumberFormatting(editTextText17);
+
         // Настройка Spinner для периода реинвестирования
         ArrayAdapter<CharSequence> adapterReinvestment = ArrayAdapter.createFromResource(this,
                 R.array.investment_periods, android.R.layout.simple_spinner_item);
         adapterReinvestment.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinner4.setAdapter(adapterReinvestment);
-
-        // Установка значения по умолчанию для Spinner реинвестирования
         spinner4.setSelection(1); // "раз в месяц"
 
         // Настройка Spinner для периода дополнительных вложений
@@ -58,8 +68,6 @@ public class Srok_Dostigenia extends AppCompatActivity {
                 R.array.deposit_periods, android.R.layout.simple_spinner_item);
         adapterDeposit.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinner6.setAdapter(adapterDeposit);
-
-        // Установка значения по умолчанию для Spinner дополнительных вложений
         spinner6.setSelection(1); // "раз в месяц"
 
         sharedPreferences2 = getSharedPreferences("VolumeCashPrefs", MODE_PRIVATE);
@@ -76,20 +84,17 @@ public class Srok_Dostigenia extends AppCompatActivity {
                     return;
                 }
 
-                double vasha_cel = Double.parseDouble(editTextText12.getText().toString());
-                double start_capital = Double.parseDouble(editTextText14.getText().toString());
-                double stavka = Double.parseDouble(editTextText15.getText().toString()) / 100;
-                double dop_vlogenia = Double.parseDouble(editTextText17.getText().toString());
+                double vasha_cel = parseNumber(editTextText12.getText().toString());
+                double start_capital = parseNumber(editTextText14.getText().toString());
+                double stavka = parseNumber(editTextText15.getText().toString()) / 100;
+                double dop_vlogenia = parseNumber(editTextText17.getText().toString());
 
-                // Период реинвестирования
                 String period_investirovania_str = spinner4.getSelectedItem().toString();
                 int period_investirovania = getPeriodInMonths(period_investirovania_str);
 
-                // Период дополнительных вложений
                 String deposit_period_str = spinner6.getSelectedItem().toString();
                 int deposit_period = getPeriodInMonths(deposit_period_str);
 
-                // Вызов метода для расчета срока
                 double t = calculateInvestmentPeriod(start_capital, vasha_cel, stavka, dop_vlogenia, period_investirovania, deposit_period);
 
                 if (t == -1) {
@@ -105,45 +110,117 @@ public class Srok_Dostigenia extends AppCompatActivity {
         });
     }
 
-    // Метод для преобразования периода в месяцы
+    private void setupNumberFormatting(EditText editText) {
+        final DecimalFormat decimalFormat = (DecimalFormat) NumberFormat.getNumberInstance(Locale.US);
+        decimalFormat.setGroupingSize(3);
+        DecimalFormatSymbols symbols = decimalFormat.getDecimalFormatSymbols();
+        symbols.setGroupingSeparator(' ');
+        decimalFormat.setDecimalFormatSymbols(symbols);
+
+        editText.addTextChangedListener(new TextWatcher() {
+            private boolean isFormatting = false;
+            private int lastCursorPosition;
+            private String previousText = "";
+            private boolean isDeleting = false;
+
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+                if (!isFormatting) {
+                    previousText = s.toString();
+                    lastCursorPosition = editText.getSelectionStart();
+                    isDeleting = count > after;
+                }
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {}
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                if (isFormatting) return;
+
+                isFormatting = true;
+
+                try {
+                    String original = s.toString().replaceAll("[^\\d]", "");
+
+                    if (!original.isEmpty()) {
+                        long value = Long.parseLong(original);
+                        String formatted = decimalFormat.format(value);
+
+                        // Обработка Backspace на пробеле
+                        if (isDeleting && lastCursorPosition > 0 &&
+                                previousText.length() > 0 &&
+                                lastCursorPosition <= previousText.length() &&
+                                previousText.charAt(lastCursorPosition - 1) == ' ') {
+
+                            // Удаляем пробел и предыдущую цифру
+                            String newText = previousText.substring(0, lastCursorPosition - 2) +
+                                    previousText.substring(lastCursorPosition);
+                            original = newText.replaceAll("[^\\d]", "");
+                            value = Long.parseLong(original);
+                            formatted = decimalFormat.format(value);
+
+                            editText.setText(formatted);
+                            editText.setSelection(Math.max(0, lastCursorPosition - 2));
+                            isFormatting = false;
+                            return;
+                        }
+
+                        if (!s.toString().equals(formatted)) {
+                            editText.setText(formatted);
+                            int newCursorPos = formatted.length();
+                            if (isDeleting && lastCursorPosition <= formatted.length()) {
+                                newCursorPos = lastCursorPosition;
+                            }
+                            editText.setSelection(newCursorPos);
+                        }
+                    } else {
+                        editText.setText("");
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                } finally {
+                    isFormatting = false;
+                }
+            }
+        });
+    }
+
+    private double parseNumber(String text) {
+        return Double.parseDouble(text.replace(" ", ""));
+    }
+
     private int getPeriodInMonths(String period) {
         switch (period) {
             case "не реинвестировать":
-            case "без доп. вложений":
-                return 0; // Период равен 0, если реинвестирование или вложения отключены
+            case "без доп. вложений": return 0;
             case "раз в месяц":
-            case "ежемесячно":
-                return 1;
+            case "ежемесячно": return 1;
             case "раз в квартал":
-            case "ежеквартально":
-                return 3;
-            case "раз в полгода":
-                return 6;
-            case "раз в год":
-                return 12;
-            default:
-                return 1; // по умолчанию раз в месяц
+            case "ежеквартально": return 3;
+            case "раз в полгода": return 6;
+            case "раз в год": return 12;
+            default: return 1;
         }
     }
 
-    // Метод для расчета срока достижения цели
-    private double calculateInvestmentPeriod(double startCapital, double targetAmount, double annualRate, double depositAmount, int reinvestmentPeriod, int depositPeriod) {
+    private double calculateInvestmentPeriod(double startCapital, double targetAmount, double annualRate,
+                                             double depositAmount, int reinvestmentPeriod, int depositPeriod) {
         if (startCapital >= targetAmount) {
-            return 0; // Если цель уже достигнута, возвращаем 0 лет
+            return 0;
         }
 
-        double monthlyRate = annualRate / 12; // Месячная ставка
+        double monthlyRate = annualRate / 12;
         double futureValue = startCapital;
         int months = 0;
-        int maxMonths = 100 * 12; // Максимальный срок расчета (100 лет)
+        int maxMonths = 100 * 12;
 
         while (futureValue < targetAmount && months < maxMonths) {
-            // Начисление процентов (если реинвестирование включено)
             if (reinvestmentPeriod > 0 && months % reinvestmentPeriod == 0) {
                 futureValue *= (1 + monthlyRate * reinvestmentPeriod);
             }
 
-            // Добавление дополнительных вложений (если вложения включены)
             if (depositPeriod > 0 && months % depositPeriod == 0) {
                 futureValue += depositAmount;
             }
@@ -151,27 +228,37 @@ public class Srok_Dostigenia extends AppCompatActivity {
             months++;
         }
 
-        if (months >= maxMonths) {
-            return -1; // Если цель не достигнута за максимальный срок, возвращаем -1
-        }
-
-        return months / 12.0; // Преобразуем месяцы в годы
+        return months >= maxMonths ? -1 : months / 12.0;
     }
 
     private void savePreferences() {
         SharedPreferences.Editor editor = sharedPreferences2.edit();
-        editor.putString("editTextText12", editTextText12.getText().toString());
-        editor.putString("editTextText14", editTextText14.getText().toString());
-        editor.putString("editTextText15", editTextText15.getText().toString());
-        editor.putString("editTextText17", editTextText17.getText().toString());
+        editor.putString("editTextText12", editTextText12.getText().toString().replace(" ", ""));
+        editor.putString("editTextText14", editTextText14.getText().toString().replace(" ", ""));
+        editor.putString("editTextText15", editTextText15.getText().toString().replace(" ", ""));
+        editor.putString("editTextText17", editTextText17.getText().toString().replace(" ", ""));
         editor.apply();
     }
 
     private void loadPreferences() {
-        editTextText12.setText(sharedPreferences2.getString("editTextText12", ""));
-        editTextText14.setText(sharedPreferences2.getString("editTextText14", ""));
-        editTextText15.setText(sharedPreferences2.getString("editTextText15", ""));
-        editTextText17.setText(sharedPreferences2.getString("editTextText17", ""));
+        editTextText12.setText(formatNumber(sharedPreferences2.getString("editTextText12", "")));
+        editTextText14.setText(formatNumber(sharedPreferences2.getString("editTextText14", "")));
+        editTextText15.setText(formatNumber(sharedPreferences2.getString("editTextText15", "")));
+        editTextText17.setText(formatNumber(sharedPreferences2.getString("editTextText17", "")));
+    }
+
+    private String formatNumber(String number) {
+        if (number.isEmpty()) return "";
+        String cleanNumber = number.replaceAll("[^\\d]", "");
+        StringBuilder formatted = new StringBuilder();
+
+        for (int i = 0; i < cleanNumber.length(); i++) {
+            if (i > 0 && (cleanNumber.length() - i) % 3 == 0) {
+                formatted.append(" ");
+            }
+            formatted.append(cleanNumber.charAt(i));
+        }
+        return formatted.toString();
     }
 
     public void GoBack(View v) {

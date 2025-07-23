@@ -20,6 +20,8 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.text.NumberFormat;
 import java.util.Locale;
 
@@ -85,12 +87,12 @@ public class ThreeActivity3 extends AppCompatActivity {
                 }
 
                 // Получаем значения, удаляя пробелы
-                float start_capital = parseFormattedNumber(editTextText.getText().toString());
-                float srok_investirovania = parseFormattedNumber(editTextText2.getText().toString());
-                float stavka = parseFormattedNumber(editTextText3.getText().toString());
-                float dop_vlogenia = parseFormattedNumber(editTextText5.getText().toString());
+                float start_capital = parseFormattedNumber(removeSpaces(editTextText.getText().toString()));
+                float srok_investirovania = parseFormattedNumber(removeSpaces(editTextText2.getText().toString()));
+                float stavka = parseFormattedNumber(removeSpaces(editTextText3.getText().toString()));
+                float dop_vlogenia = parseFormattedNumber(removeSpaces(editTextText5.getText().toString()));
 
-                // Остальной код расчета остается без изменений
+
                 String period_investirovania_str = spinner.getSelectedItem().toString();
                 int period_investirovania = getPeriodInMonths(period_investirovania_str);
 
@@ -108,13 +110,25 @@ public class ThreeActivity3 extends AppCompatActivity {
 
     // Метод для настройки форматирования чисел
     private void setupNumberFormatting(EditText editText) {
+        final DecimalFormat decimalFormat = (DecimalFormat) NumberFormat.getNumberInstance(Locale.US);
+        decimalFormat.setGroupingSize(3);
+        DecimalFormatSymbols symbols = decimalFormat.getDecimalFormatSymbols();
+        symbols.setGroupingSeparator(' ');
+        decimalFormat.setDecimalFormatSymbols(symbols);
+
         editText.addTextChangedListener(new TextWatcher() {
             private boolean isFormatting = false;
-            private int previousLength = 0;
+            private int lastCursorPosition;
+            private String previousText = "";
+            private boolean isDeleting = false;
 
             @Override
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-                previousLength = s.length();
+                if (!isFormatting) {
+                    previousText = s.toString();
+                    lastCursorPosition = editText.getSelectionStart();
+                    isDeleting = count > after;
+                }
             }
 
             @Override
@@ -122,34 +136,70 @@ public class ThreeActivity3 extends AppCompatActivity {
 
             @Override
             public void afterTextChanged(Editable s) {
-                if (isFormatting) {
-                    return;
-                }
+                if (isFormatting) return;
 
-                // Форматируем только если текст был добавлен, а не удален
-                if (s.length() > previousLength) {
-                    isFormatting = true;
+                isFormatting = true;
 
-                    try {
-                        String original = s.toString().replaceAll("[^\\d]", "");
-                        if (!original.isEmpty()) {
-                            long value = Long.parseLong(original);
-                            String formatted = NumberFormat.getNumberInstance(Locale.US).format(value);
-                            if (!s.toString().equals(formatted)) {
-                                editText.setText(formatted);
-                                editText.setSelection(formatted.length());
-                            }
+                try {
+                    String original = s.toString().replaceAll("[^\\d]", "");
+
+                    if (!original.isEmpty()) {
+                        long value = Long.parseLong(original);
+                        String formatted = decimalFormat.format(value);
+
+                        // Обработка Backspace на пробеле
+                        if (isDeleting && lastCursorPosition > 0 &&
+                                previousText.length() > 0 &&
+                                lastCursorPosition <= previousText.length() &&
+                                previousText.charAt(lastCursorPosition - 1) == ' ') {
+
+                            // Удаляем пробел и предыдущую цифру
+                            String newText = previousText.substring(0, lastCursorPosition - 2) +
+                                    previousText.substring(lastCursorPosition);
+                            original = newText.replaceAll("[^\\d]", "");
+                            value = Long.parseLong(original);
+                            formatted = decimalFormat.format(value);
+
+                            editText.setText(formatted);
+                            editText.setSelection(Math.max(0, lastCursorPosition - 2));
+                            isFormatting = false;
+                            return;
                         }
-                    } catch (NumberFormatException e) {
-                        e.printStackTrace();
-                    }
 
+                        if (!s.toString().equals(formatted)) {
+                            editText.setText(formatted);
+                            int newCursorPos = formatted.length();
+                            if (isDeleting && lastCursorPosition <= formatted.length()) {
+                                newCursorPos = lastCursorPosition;
+                            }
+                            editText.setSelection(newCursorPos);
+                        }
+                    } else {
+                        editText.setText("");
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                } finally {
                     isFormatting = false;
                 }
             }
         });
     }
+    private String removeSpaces(String numberWithSpaces) {
+        return numberWithSpaces.replace(" ", "");
+    }
+    private String formatNumber(String number) {
+        StringBuilder formatted = new StringBuilder();
+        String cleanNumber = number.replaceAll("[^\\d]", "");
 
+        for (int i = 0; i < cleanNumber.length(); i++) {
+            if (i > 0 && (cleanNumber.length() - i) % 3 == 0) {
+                formatted.append(" ");
+            }
+            formatted.append(cleanNumber.charAt(i));
+        }
+        return formatted.toString();
+    }
     // Метод для преобразования форматированного числа обратно в float
     private float parseFormattedNumber(String formatted) {
         try {
@@ -209,10 +259,10 @@ public class ThreeActivity3 extends AppCompatActivity {
     }
 
     private void loadPreferences() {
-        editTextText.setText(sharedPreferences5.getString("editTextText", ""));
-        editTextText2.setText(sharedPreferences5.getString("editTextText2", ""));
-        editTextText3.setText(sharedPreferences5.getString("editTextText3", ""));
-        editTextText5.setText(sharedPreferences5.getString("editTextText5", ""));
+        editTextText.setText(formatNumber(sharedPreferences5.getString("editTextText", "")));
+        editTextText2.setText(formatNumber(sharedPreferences5.getString("editTextText2", "")));
+        editTextText3.setText(formatNumber(sharedPreferences5.getString("editTextText3", "")));
+        editTextText5.setText(formatNumber(sharedPreferences5.getString("editTextText5", "")));
     }
 
     public void goback(View v) {

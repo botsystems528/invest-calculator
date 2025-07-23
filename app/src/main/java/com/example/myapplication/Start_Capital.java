@@ -3,7 +3,9 @@ package com.example.myapplication;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.text.Editable;
 import android.text.TextUtils;
+import android.text.TextWatcher;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -16,6 +18,12 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+
+
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.text.NumberFormat;
+import java.util.Locale;
 
 public class Start_Capital extends AppCompatActivity {
     private TextView textView26;
@@ -44,118 +52,206 @@ public class Start_Capital extends AppCompatActivity {
         spinner3 = findViewById(R.id.spinner3);
         spinnerDepositPeriod = findViewById(R.id.spinnerDepositPeriod);
 
-        // Настройка Spinner для периода реинвестирования
+        setupNumberFormatting(editTextText9);
+        setupNumberFormatting(editTextText10);
+        setupNumberFormatting(editTextText11);
+        setupNumberFormatting(editTextText13);
+
+        // Настройка Spinner
         ArrayAdapter<CharSequence> adapterReinvestment = ArrayAdapter.createFromResource(this,
                 R.array.investment_periods, android.R.layout.simple_spinner_item);
         adapterReinvestment.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinner3.setAdapter(adapterReinvestment);
+        spinner3.setSelection(1);
 
-        // Установка значения по умолчанию для Spinner реинвестирования
-        spinner3.setSelection(1); // "раз в месяц"
-
-        // Настройка Spinner для периода дополнительных вложений
         ArrayAdapter<CharSequence> adapterDeposit = ArrayAdapter.createFromResource(this,
                 R.array.deposit_periods, android.R.layout.simple_spinner_item);
         adapterDeposit.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinnerDepositPeriod.setAdapter(adapterDeposit);
-
-        // Установка значения по умолчанию для Spinner дополнительных вложений
-        spinnerDepositPeriod.setSelection(1); // "раз в месяц"
+        spinnerDepositPeriod.setSelection(1);
 
         sharedPreferences3 = getSharedPreferences("VolumeCashPrefs", MODE_PRIVATE);
         loadPreferences();
 
-        button14.setOnClickListener(new View.OnClickListener() {
+        button14.setOnClickListener(v -> calculateAndSave());
+    }
+
+    private void setupNumberFormatting(EditText editText) {
+        final DecimalFormat decimalFormat = (DecimalFormat) NumberFormat.getNumberInstance(Locale.US);
+        decimalFormat.setGroupingSize(3);
+        DecimalFormatSymbols symbols = decimalFormat.getDecimalFormatSymbols();
+        symbols.setGroupingSeparator(' ');
+        decimalFormat.setDecimalFormatSymbols(symbols);
+
+        editText.addTextChangedListener(new TextWatcher() {
+            private boolean isFormatting = false;
+            private int lastCursorPosition;
+            private String previousText = "";
+            private boolean isDeleting = false;
+
             @Override
-            public void onClick(View view) {
-                if (TextUtils.isEmpty(editTextText9.getText().toString())
-                        || TextUtils.isEmpty(editTextText10.getText().toString())
-                        || TextUtils.isEmpty(editTextText11.getText().toString())
-                        || TextUtils.isEmpty(editTextText13.getText().toString())) {
-                    textView26.setText("Все поля должны быть заполнены!");
-                    return;
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+                if (!isFormatting) {
+                    previousText = s.toString();
+                    lastCursorPosition = editText.getSelectionStart();
+                    isDeleting = count > after;
                 }
+            }
 
-                double vasha_cel = Double.parseDouble(editTextText9.getText().toString());
-                double srok_investirovania = Double.parseDouble(editTextText10.getText().toString());
-                double stavka = Double.parseDouble(editTextText11.getText().toString()) / 100;
-                double dop_vlogenia = Double.parseDouble(editTextText13.getText().toString());
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {}
 
-                // Период реинвестирования
-                String period_investirovania_str = spinner3.getSelectedItem().toString();
-                int period_investirovania = getPeriodInMonths(period_investirovania_str);
+            @Override
+            public void afterTextChanged(Editable s) {
+                if (isFormatting) return;
 
-                // Период дополнительных вложений
-                String deposit_period_str = spinnerDepositPeriod.getSelectedItem().toString();
-                int deposit_period = getPeriodInMonths(deposit_period_str);
+                isFormatting = true;
 
-                // Расчет стартового капитала
-                double P = calculateStartCapital(vasha_cel, srok_investirovania, stavka, dop_vlogenia, period_investirovania, deposit_period);
+                try {
+                    String original = s.toString().replaceAll("[^\\d]", "");
 
-                textView26.setText(String.format("Стартовая сумма: %.2f", P));
+                    if (!original.isEmpty()) {
+                        long value = Long.parseLong(original);
+                        String formatted = decimalFormat.format(value);
 
-                savePreferences();
+                        // Обработка Backspace на пробеле
+                        if (isDeleting && lastCursorPosition > 0 &&
+                                previousText.length() > 0 &&
+                                lastCursorPosition <= previousText.length() &&
+                                previousText.charAt(lastCursorPosition - 1) == ' ') {
+
+                            // Удаляем пробел и предыдущую цифру
+                            String newText = previousText.substring(0, lastCursorPosition - 2) +
+                                    previousText.substring(lastCursorPosition);
+                            original = newText.replaceAll("[^\\d]", "");
+                            value = Long.parseLong(original);
+                            formatted = decimalFormat.format(value);
+
+                            editText.setText(formatted);
+                            editText.setSelection(Math.max(0, lastCursorPosition - 2));
+                            isFormatting = false;
+                            return;
+                        }
+
+                        if (!s.toString().equals(formatted)) {
+                            editText.setText(formatted);
+                            int newCursorPos = formatted.length();
+                            if (isDeleting && lastCursorPosition <= formatted.length()) {
+                                newCursorPos = lastCursorPosition;
+                            }
+                            editText.setSelection(newCursorPos);
+                        }
+                    } else {
+                        editText.setText("");
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                } finally {
+                    isFormatting = false;
+                }
             }
         });
     }
 
-    // Метод для преобразования периода в месяцы
-    private int getPeriodInMonths(String period) {
-        switch (period) {
-            case "не реинвестировать":
-            case "без доп. вложений":
-                return 0; // Период равен 0, если реинвестирование или вложения отключены
-            case "раз в месяц":
-            case "ежемесячно":
-                return 1;
-            case "раз в квартал":
-            case "ежеквартально":
-                return 3;
-            case "раз в полгода":
-                return 6;
-            case "раз в год":
-                return 12;
-            default:
-                return 1; // по умолчанию раз в месяц
+    private String removeSpaces(String numberWithSpaces) {
+        return numberWithSpaces.replace(" ", "");
+    }
+
+    private String formatNumber(String number) {
+        StringBuilder formatted = new StringBuilder();
+        String cleanNumber = number.replaceAll("[^\\d]", "");
+
+        for (int i = 0; i < cleanNumber.length(); i++) {
+            if (i > 0 && (cleanNumber.length() - i) % 3 == 0) {
+                formatted.append(" ");
+            }
+            formatted.append(cleanNumber.charAt(i));
+        }
+        return formatted.toString();
+    }
+
+    private void calculateAndSave() {
+        try {
+            if (TextUtils.isEmpty(editTextText9.getText()) ||
+                    TextUtils.isEmpty(editTextText10.getText()) ||
+                    TextUtils.isEmpty(editTextText11.getText()) ||
+                    TextUtils.isEmpty(editTextText13.getText())) {
+                textView26.setText("Все поля должны быть заполнены!");
+                return;
+            }
+
+            double vasha_cel = parseNumber(removeSpaces(editTextText9.getText().toString()));
+            double srok_investirovania = parseNumber(removeSpaces(editTextText10.getText().toString()));
+            double stavka = parseNumber(removeSpaces(editTextText11.getText().toString())) / 100;
+            double dop_vlogenia = parseNumber(removeSpaces(editTextText13.getText().toString()));
+
+            String period_str = spinner3.getSelectedItem().toString();
+            String deposit_str = spinnerDepositPeriod.getSelectedItem().toString();
+
+            int period = getPeriodInMonths(period_str);
+            int depositPeriod = getPeriodInMonths(deposit_str);
+
+            double P = calculateStartCapital(vasha_cel, srok_investirovania, stavka,
+                    dop_vlogenia, period, depositPeriod);
+
+            textView26.setText(String.format(Locale.getDefault(), "Стартовая сумма: %.2f", P));
+            savePreferences();
+
+        } catch (NumberFormatException e) {
+            textView26.setText("Ошибка ввода чисел!");
         }
     }
 
-    // Метод для расчета стартового капитала
-    private double calculateStartCapital(double targetAmount, double investmentPeriod, double annualRate, double depositAmount, int reinvestmentPeriod, int depositPeriod) {
-        double monthlyRate = annualRate / 12; // Месячная ставка
-        double futureValue = targetAmount;
-        int totalMonths = (int) (investmentPeriod * 12); // Общее количество месяцев
+    private double parseNumber(String text) {
+        return Double.parseDouble(text.replace(" ", ""));
+    }
 
-        // Обратный расчет: от будущей суммы к начальной
-        for (int month = totalMonths; month >= 1; month--) {
-            // Отменяем начисление процентов (если реинвестирование включено)
-            if (reinvestmentPeriod > 0 && month % reinvestmentPeriod == 0) {
-                futureValue /= (1 + monthlyRate * reinvestmentPeriod);
-            }
+    private int getPeriodInMonths(String period) {
+        switch (period) {
+            case "не реинвестировать":
+            case "без доп. вложений": return 0;
+            case "раз в месяц":
+            case "ежемесячно": return 1;
+            case "раз в квартал":
+            case "ежеквартально": return 3;
+            case "раз в полгода": return 6;
+            case "раз в год": return 12;
+            default: return 1;
+        }
+    }
 
-            // Вычитаем дополнительные вложения (если вложения включены)
-            if (depositPeriod > 0 && month % depositPeriod == 0) {
-                futureValue -= depositAmount;
+    private double calculateStartCapital(double targetAmount, double investmentPeriod,
+                                         double annualRate, double depositAmount,
+                                         int reinvestmentPeriod, int depositPeriod) {
+        double monthlyRate = annualRate / 12;
+        int totalMonths = (int) (investmentPeriod * 12);
+
+        double futureValueOfDeposits = 0;
+        if (depositPeriod > 0) {
+            int numberOfDeposits = totalMonths / depositPeriod;
+            for (int i = 1; i <= numberOfDeposits; i++) {
+                int monthsLeft = totalMonths - (i - 1) * depositPeriod;
+                futureValueOfDeposits += depositAmount * Math.pow(1 + monthlyRate, monthsLeft);
             }
         }
 
-        return futureValue;
+        return (targetAmount - futureValueOfDeposits) / Math.pow(1 + monthlyRate, totalMonths);
     }
 
     private void savePreferences() {
         SharedPreferences.Editor editor = sharedPreferences3.edit();
-        editor.putString("editTextText9", editTextText9.getText().toString());
-        editor.putString("editTextText10", editTextText10.getText().toString());
-        editor.putString("editTextText11", editTextText11.getText().toString());
-        editor.putString("editTextText13", editTextText13.getText().toString());
+        editor.putString("editTextText9", editTextText9.getText().toString().replace(" ", ""));
+        editor.putString("editTextText10", editTextText10.getText().toString().replace(" ", ""));
+        editor.putString("editTextText11", editTextText11.getText().toString().replace(" ", ""));
+        editor.putString("editTextText13", editTextText13.getText().toString().replace(" ", ""));
         editor.apply();
     }
 
     private void loadPreferences() {
-        editTextText9.setText(sharedPreferences3.getString("editTextText9", ""));
-        editTextText10.setText(sharedPreferences3.getString("editTextText10", ""));
-        editTextText11.setText(sharedPreferences3.getString("editTextText11", ""));
-        editTextText13.setText(sharedPreferences3.getString("editTextText13", ""));
+        editTextText9.setText(formatNumber(sharedPreferences3.getString("editTextText9", "")));
+        editTextText10.setText(formatNumber(sharedPreferences3.getString("editTextText10", "")));
+        editTextText11.setText(formatNumber(sharedPreferences3.getString("editTextText11", "")));
+        editTextText13.setText(formatNumber(sharedPreferences3.getString("editTextText13", "")));
     }
 
     public void GoBack(View v) {

@@ -12,6 +12,9 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.text.Editable;
 import android.text.TextWatcher;
+
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.text.NumberFormat;
 import java.util.Locale;
 
@@ -115,13 +118,25 @@ public class Stavka extends AppCompatActivity {
     }
 
     private void setupNumberFormatting(EditText editText) {
+        final DecimalFormat decimalFormat = (DecimalFormat) NumberFormat.getNumberInstance(Locale.US);
+        decimalFormat.setGroupingSize(3);
+        DecimalFormatSymbols symbols = decimalFormat.getDecimalFormatSymbols();
+        symbols.setGroupingSeparator(' ');
+        decimalFormat.setDecimalFormatSymbols(symbols);
+
         editText.addTextChangedListener(new TextWatcher() {
             private boolean isFormatting = false;
-            private int previousLength = 0;
+            private int lastCursorPosition;
+            private String previousText = "";
+            private boolean isDeleting = false;
 
             @Override
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-                previousLength = s.length();
+                if (!isFormatting) {
+                    previousText = s.toString();
+                    lastCursorPosition = editText.getSelectionStart();
+                    isDeleting = count > after;
+                }
             }
 
             @Override
@@ -129,28 +144,50 @@ public class Stavka extends AppCompatActivity {
 
             @Override
             public void afterTextChanged(Editable s) {
-                if (isFormatting) {
-                    return;
-                }
+                if (isFormatting) return;
 
-                // Форматируем только если текст был добавлен, а не удален
-                if (s.length() > previousLength) {
-                    isFormatting = true;
+                isFormatting = true;
 
-                    try {
-                        String original = s.toString().replaceAll("[^\\d]", "");
-                        if (!original.isEmpty()) {
-                            long value = Long.parseLong(original);
-                            String formatted = NumberFormat.getNumberInstance(Locale.US).format(value);
-                            if (!s.toString().equals(formatted)) {
-                                editText.setText(formatted);
-                                editText.setSelection(formatted.length());
-                            }
+                try {
+                    String original = s.toString().replaceAll("[^\\d]", "");
+
+                    if (!original.isEmpty()) {
+                        long value = Long.parseLong(original);
+                        String formatted = decimalFormat.format(value);
+
+                        // Обработка Backspace на пробеле
+                        if (isDeleting && lastCursorPosition > 0 &&
+                                previousText.length() > 0 &&
+                                lastCursorPosition <= previousText.length() &&
+                                previousText.charAt(lastCursorPosition - 1) == ' ') {
+
+                            // Удаляем пробел и предыдущую цифру
+                            String newText = previousText.substring(0, lastCursorPosition - 2) +
+                                    previousText.substring(lastCursorPosition);
+                            original = newText.replaceAll("[^\\d]", "");
+                            value = Long.parseLong(original);
+                            formatted = decimalFormat.format(value);
+
+                            editText.setText(formatted);
+                            editText.setSelection(Math.max(0, lastCursorPosition - 2));
+                            isFormatting = false;
+                            return;
                         }
-                    } catch (NumberFormatException e) {
-                        e.printStackTrace();
-                    }
 
+                        if (!s.toString().equals(formatted)) {
+                            editText.setText(formatted);
+                            int newCursorPos = formatted.length();
+                            if (isDeleting && lastCursorPosition <= formatted.length()) {
+                                newCursorPos = lastCursorPosition;
+                            }
+                            editText.setSelection(newCursorPos);
+                        }
+                    } else {
+                        editText.setText("");
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                } finally {
                     isFormatting = false;
                 }
             }
@@ -159,6 +196,7 @@ public class Stavka extends AppCompatActivity {
 
     private float parseFormattedNumber(String formatted) {
         try {
+            // Удаляем все пробелы и другие нецифровые символы
             String clean = formatted.replaceAll("[^\\d]", "");
             return Float.parseFloat(clean);
         } catch (NumberFormatException e) {
