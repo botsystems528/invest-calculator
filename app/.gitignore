@@ -10,3 +10,17 @@
 /captures
 .externalNativeBuild
 .cxx
+# Android Studio
+.idea/
+.gradle/
+build/
+*.iml
+local.properties
+
+# Keystores
+*.jks
+*.keystore
+
+# Файлы с секретами
+google-services.json
+*/secret/
